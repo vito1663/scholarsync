@@ -4,7 +4,8 @@ project(ScholarSync VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)  # 自动处理 .qrc 文件，跨平台最可靠的方式
+# 不使用 AUTORCC，改用预生成的 qrc_qml.cpp 直接加入源文件列表
+# 这样可以绕过所有平台差异，确保 QML 资源在 Windows/Linux/macOS 上都能正确嵌入
 
 # Qt6 模块
 find_package(Qt6 REQUIRED COMPONENTS
@@ -24,6 +25,7 @@ qt_standard_project_setup(REQUIRES 6.5)
 # 收集源文件
 set(SOURCES
     src/main.cpp
+    src/qrc_qml.cpp          # 由 rcc 预生成，包含所有 QML 文件的二进制内容
     src/database/DatabaseManager.cpp
     src/library/LibraryManager.cpp
     src/library/FolderWatcher.cpp
@@ -43,13 +45,10 @@ set(HEADERS
     src/sync/SyncManager.h
 )
 
-# 直接把 qml.qrc 加入可执行文件的源文件列表
-# CMAKE_AUTORCC=ON 会自动调用 rcc 工具处理 .qrc 文件
-# 这是最传统、最可靠的方式，在所有平台和生成器下均有效
+# qrc_qml.cpp 已预生成并加入 SOURCES，直接编译
 qt_add_executable(ScholarSync
     ${SOURCES}
     ${HEADERS}
-    qml.qrc
 )
 
 target_link_libraries(ScholarSync PRIVATE
