@@ -30,21 +30,36 @@ jobs:
         with:
           arch: x64
 
-      - name: Print Qt paths and verify qml.qrc
+      - name: Pre-generate qrc_qml.cpp using Windows rcc.exe
         shell: powershell
         run: |
-          Write-Host "QT_ROOT_DIR=$env:QT_ROOT_DIR"
-          Write-Host "Qt6_DIR=$env:Qt6_DIR"
-          Write-Host "Current dir: $(Get-Location)"
-          Write-Host "qml.qrc exists: $(Test-Path qml.qrc)"
-          Write-Host "qml/main.qml exists: $(Test-Path qml/main.qml)"
-          if (Test-Path "$env:QT_ROOT_DIR\bin\windeployqt.exe") {
-            Write-Host "windeployqt: $env:QT_ROOT_DIR\bin\windeployqt.exe"
+          # 找到 rcc.exe
+          $rcc = "$env:QT_ROOT_DIR\bin\rcc.exe"
+          if (-not (Test-Path $rcc)) {
+            $rcc = (Get-Command "rcc.exe" -ErrorAction SilentlyContinue).Source
           }
-          # 打印 qml.qrc 内容确认路径正确
+          if (-not $rcc) {
+            Write-Error "rcc.exe not found! QT_ROOT_DIR=$env:QT_ROOT_DIR"
+            exit 1
+          }
+          Write-Host "Using rcc: $rcc"
+          Write-Host "qml.qrc exists: $(Test-Path qml.qrc)"
           Get-Content qml.qrc
 
-      - name: Configure CMake (Ninja)
+          # 用 Windows rcc.exe 生成 qrc_qml.cpp，放到 src/ 目录
+          & "$rcc" --name qml_resources qml.qrc -o src\qrc_qml.cpp
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "rcc.exe failed with exit code $LASTEXITCODE"
+            exit 1
+          }
+          $size = (Get-Item src\qrc_qml.cpp).Length
+          Write-Host "Generated src\qrc_qml.cpp: $size bytes"
+          if ($size -lt 50000) {
+            Write-Warning "qrc_qml.cpp is too small ($size bytes), QML files may not be found!"
+            Get-Content qml.qrc
+          }
+
+      - name: Configure CMake
         shell: cmd
         run: |
           cmake -B build -S . ^
@@ -55,27 +70,19 @@ jobs:
 
       - name: Build
         shell: cmd
-        run: cmake --build build --config Release --verbose
+        run: cmake --build build --config Release
 
-      - name: Verify exe and QML embedding
+      - name: Verify exe size
         shell: powershell
         run: |
           $exe = Get-ChildItem -Recurse build -Filter "ScholarSync.exe" | Select-Object -First 1
           if (-not $exe) { Write-Error "ScholarSync.exe not found!"; exit 1 }
-          Write-Host "Found: $($exe.FullName)"
-          Write-Host "Size: $($exe.Length) bytes"
+          Write-Host "ScholarSync.exe: $($exe.Length) bytes"
           if ($exe.Length -lt 250000) {
-            Write-Warning "exe is too small ($($exe.Length) bytes), QML resources may not be embedded!"
-          } else {
-            Write-Host "exe size looks good, QML resources likely embedded."
+            Write-Error "exe too small ($($exe.Length) bytes) - QML resources not embedded!"
+            exit 1
           }
-          # 检查 qrc_qml.cpp 是否被生成
-          $qrcCpp = Get-ChildItem -Recurse build -Filter "qrc_qml.cpp" | Select-Object -First 1
-          if ($qrcCpp) {
-            Write-Host "qrc_qml.cpp found: $($qrcCpp.FullName) ($($qrcCpp.Length) bytes)"
-          } else {
-            Write-Warning "qrc_qml.cpp NOT found - resources may not be embedded!"
-          }
+          Write-Host "exe size OK - QML resources embedded successfully"
 
       - name: Deploy with windeployqt
         shell: powershell
@@ -91,7 +98,6 @@ jobs:
           if (-not $wdqt) { Write-Error "windeployqt not found!"; exit 1 }
           Write-Host "Using: $wdqt"
 
-          # QML 已通过 qrc 嵌入到 exe 中，不需要 --qmldir 参数
           & "$wdqt" --release --no-translations --compiler-runtime "deploy\ScholarSync.exe"
 
           Write-Host "Deploy done. Files:"
