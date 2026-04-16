@@ -30,33 +30,52 @@ jobs:
         with:
           arch: x64
 
-      - name: Print Qt paths
+      - name: Print Qt paths and verify qml.qrc
         shell: powershell
         run: |
           Write-Host "QT_ROOT_DIR=$env:QT_ROOT_DIR"
           Write-Host "Qt6_DIR=$env:Qt6_DIR"
-          $wdqt = "$env:QT_ROOT_DIR\bin\windeployqt.exe"
-          if (Test-Path $wdqt) {
-            Write-Host "windeployqt found: $wdqt"
-          } else {
-            Write-Host "Searching windeployqt..."
-            Get-ChildItem -Path "C:\Qt","D:\a" -Recurse -Filter "windeployqt.exe" -ErrorAction SilentlyContinue | Select-Object FullName
+          Write-Host "Current dir: $(Get-Location)"
+          Write-Host "qml.qrc exists: $(Test-Path qml.qrc)"
+          Write-Host "qml/main.qml exists: $(Test-Path qml/main.qml)"
+          if (Test-Path "$env:QT_ROOT_DIR\bin\windeployqt.exe") {
+            Write-Host "windeployqt: $env:QT_ROOT_DIR\bin\windeployqt.exe"
           }
+          # 打印 qml.qrc 内容确认路径正确
+          Get-Content qml.qrc
 
-      - name: Configure CMake
+      - name: Configure CMake (Ninja)
         shell: cmd
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -G "NMake Makefiles"
+        run: |
+          cmake -B build -S . ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -G "Ninja" ^
+            -DCMAKE_C_COMPILER=cl ^
+            -DCMAKE_CXX_COMPILER=cl
 
       - name: Build
         shell: cmd
-        run: cmake --build build --config Release
+        run: cmake --build build --config Release --verbose
 
-      - name: Verify exe
+      - name: Verify exe and QML embedding
         shell: powershell
         run: |
           $exe = Get-ChildItem -Recurse build -Filter "ScholarSync.exe" | Select-Object -First 1
           if (-not $exe) { Write-Error "ScholarSync.exe not found!"; exit 1 }
-          Write-Host "Found: $($exe.FullName) ($($exe.Length) bytes)"
+          Write-Host "Found: $($exe.FullName)"
+          Write-Host "Size: $($exe.Length) bytes"
+          if ($exe.Length -lt 250000) {
+            Write-Warning "exe is too small ($($exe.Length) bytes), QML resources may not be embedded!"
+          } else {
+            Write-Host "exe size looks good, QML resources likely embedded."
+          }
+          # 检查 qrc_qml.cpp 是否被生成
+          $qrcCpp = Get-ChildItem -Recurse build -Filter "qrc_qml.cpp" | Select-Object -First 1
+          if ($qrcCpp) {
+            Write-Host "qrc_qml.cpp found: $($qrcCpp.FullName) ($($qrcCpp.Length) bytes)"
+          } else {
+            Write-Warning "qrc_qml.cpp NOT found - resources may not be embedded!"
+          }
 
       - name: Deploy with windeployqt
         shell: powershell

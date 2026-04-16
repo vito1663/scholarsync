@@ -43,9 +43,9 @@ set(HEADERS
     src/sync/SyncManager.h
 )
 
-# 将 QML 文件嵌入为 Qt 资源（通过标准 qrc XML 文件）
-# 资源路径为 qrc:/qml/main.qml
-qt_add_resources(QML_RESOURCES resources/qml.qrc)
+# 将 QML 文件嵌入为 Qt 资源
+# qml.qrc 在项目根目录，路径相对于项目根，跨平台兼容
+qt_add_resources(QML_RESOURCES "${CMAKE_CURRENT_SOURCE_DIR}/qml.qrc")
 
 qt_add_executable(ScholarSync
     ${SOURCES}
