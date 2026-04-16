@@ -12,11 +12,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 1. 检出代码
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. 安装 Qt 6.6.3
       - name: Install Qt 6.6.3
         uses: jurplel/install-qt-action@v4
         with:
@@ -27,132 +25,89 @@ jobs:
           modules: 'qtpdf qtnetworkauth'
           cache: true
 
-      # 3. 配置 MSVC 编译环境
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      # 4. 打印 Qt 相关环境变量（便于调试）
-      - name: Print Qt environment
+      - name: Print Qt paths
         shell: powershell
         run: |
-          Write-Host "QTDIR=$env:QTDIR"
-          Write-Host "Qt6_DIR=$env:Qt6_DIR"
           Write-Host "QT_ROOT_DIR=$env:QT_ROOT_DIR"
-          Write-Host "QT_PLUGIN_PATH=$env:QT_PLUGIN_PATH"
-          # jurplel/install-qt-action 会设置 QT_ROOT_DIR
-          $qtBin = "$env:QT_ROOT_DIR\bin"
-          Write-Host "Qt bin dir: $qtBin"
-          if (Test-Path "$qtBin\windeployqt.exe") {
-            Write-Host "windeployqt found!"
+          Write-Host "Qt6_DIR=$env:Qt6_DIR"
+          $wdqt = "$env:QT_ROOT_DIR\bin\windeployqt.exe"
+          if (Test-Path $wdqt) {
+            Write-Host "windeployqt found: $wdqt"
           } else {
-            Write-Host "windeployqt NOT found at $qtBin"
-            # 搜索 windeployqt
-            Get-ChildItem -Path "C:\Qt" -Recurse -Filter "windeployqt.exe" -ErrorAction SilentlyContinue | Select-Object FullName
-            Get-ChildItem -Path "D:\a" -Recurse -Filter "windeployqt.exe" -ErrorAction SilentlyContinue | Select-Object FullName
+            Write-Host "Searching windeployqt..."
+            Get-ChildItem -Path "C:\Qt","D:\a" -Recurse -Filter "windeployqt.exe" -ErrorAction SilentlyContinue | Select-Object FullName
           }
 
-      # 5. CMake 配置
       - name: Configure CMake
         shell: cmd
-        run: |
-          cmake -B build -S . ^
-            -DCMAKE_BUILD_TYPE=Release ^
-            -G "NMake Makefiles"
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -G "NMake Makefiles"
 
-      # 6. 编译
       - name: Build
         shell: cmd
-        run: |
-          cmake --build build --config Release
+        run: cmake --build build --config Release
 
-      # 7. 验证编译产物
-      - name: Verify build output
+      - name: Verify exe
         shell: powershell
         run: |
-          $exeFiles = Get-ChildItem -Recurse build\ -Filter "ScholarSync.exe"
-          if ($exeFiles.Count -eq 0) {
-            Write-Error "ScholarSync.exe not found!"
-            Get-ChildItem -Recurse build\ -Filter "*.exe"
-            exit 1
-          }
-          foreach ($f in $exeFiles) {
-            Write-Host "Found: $($f.FullName) ($($f.Length) bytes)"
-          }
+          $exe = Get-ChildItem -Recurse build -Filter "ScholarSync.exe" | Select-Object -First 1
+          if (-not $exe) { Write-Error "ScholarSync.exe not found!"; exit 1 }
+          Write-Host "Found: $($exe.FullName) ($($exe.Length) bytes)"
 
-      # 8. 使用 windeployqt 打包所有依赖
       - name: Deploy with windeployqt
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path deploy | Out-Null
+          $exe = Get-ChildItem -Recurse build -Filter "ScholarSync.exe" | Select-Object -First 1 -ExpandProperty FullName
+          Copy-Item $exe deploy\
 
-          # 查找 exe
-          $exePath = Get-ChildItem -Recurse build\ -Filter "ScholarSync.exe" | Select-Object -First 1 -ExpandProperty FullName
-          Write-Host "Deploying: $exePath"
-          Copy-Item $exePath deploy\
+          $wdqt = "$env:QT_ROOT_DIR\bin\windeployqt.exe"
+          if (-not (Test-Path $wdqt)) {
+            $wdqt = (Get-Command "windeployqt.exe" -ErrorAction SilentlyContinue).Source
+          }
+          if (-not $wdqt) { Write-Error "windeployqt not found!"; exit 1 }
+          Write-Host "Using: $wdqt"
 
-          # 通过 QT_ROOT_DIR 环境变量获取 windeployqt 路径
-          # jurplel/install-qt-action 会设置 QT_ROOT_DIR
-          $windeployqt = "$env:QT_ROOT_DIR\bin\windeployqt.exe"
-          Write-Host "windeployqt: $windeployqt"
+          $qmlSrc = "${{ github.workspace }}\qml"
+          & "$wdqt" --release --qmldir "$qmlSrc" --no-translations --compiler-runtime "deploy\ScholarSync.exe"
 
-          if (-not (Test-Path $windeployqt)) {
-            # 备用方案：在 PATH 中查找
-            $windeployqt = (Get-Command "windeployqt.exe" -ErrorAction SilentlyContinue).Source
-            if (-not $windeployqt) {
-              Write-Error "Cannot find windeployqt.exe!"
-              exit 1
-            }
+          Write-Host "Deploy done. Files:"
+          Get-ChildItem deploy | Select-Object Name, Length
+
+      - name: Create README
+        shell: powershell
+        run: |
+          $content = "ScholarSync - AI Academic Reader`r`n"
+          $content += "================================`r`n`r`n"
+          $content += "How to run:`r`n"
+          $content += "1. Run vc_redist.x64.exe first (if missing VC++ runtime)`r`n"
+          $content += "2. Double-click ScholarSync.exe`r`n"
+          $content += "3. Go to Settings, enter your RAGFlow API Key`r`n`r`n"
+          $content += "Requirements: Windows 10/11 (64-bit)`r`n`r`n"
+          $content += "Log file: %APPDATA%\ScholarSync\ScholarSync\scholarsync.log`r`n"
+          Set-Content -Path "deploy\README.txt" -Value $content -Encoding UTF8
+
+      - name: Download vc_redist
+        shell: powershell
+        run: |
+          try {
+            Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "deploy\vc_redist.x64.exe" -UseBasicParsing -TimeoutSec 60
+            Write-Host "vc_redist.x64.exe downloaded"
+          } catch {
+            Write-Host "Download failed (non-fatal): $_"
           }
 
-          $qmlDir = "${{ github.workspace }}\qml"
-          Write-Host "QML dir: $qmlDir"
-
-          & "$windeployqt" `
-            --release `
-            --qmldir "$qmlDir" `
-            --no-translations `
-            --compiler-runtime `
-            "deploy\ScholarSync.exe"
-
-          Write-Host "=== Deploy result ==="
-          Get-ChildItem deploy\ | Select-Object Name, Length
-
-      # 9. 打包 ZIP
       - name: Package ZIP
         shell: powershell
         run: |
-          # 下载 VC++ Redistributable
-          try {
-            Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" `
-              -OutFile "deploy\vc_redist.x64.exe" -UseBasicParsing -TimeoutSec 60
-            Write-Host "vc_redist downloaded"
-          } catch {
-            Write-Host "vc_redist download failed, skipping: $_"
-          }
-
-          # 创建说明文件
-          @"
-ScholarSync - AI 学术阅读器
-================================
-
-首次运行说明：
-1. 如果提示缺少运行库，请先运行 vc_redist.x64.exe 安装 VC++ 运行时
-2. 双击 ScholarSync.exe 启动
-3. 进入设置页面，填入 RAGFlow API Key
-
-系统要求：Windows 10 / 11 (64位)
-
-遇到问题？查看日志：
-%APPDATA%\ScholarSync\ScholarSync\scholarsync.log
-"@ | Out-File -FilePath "deploy\README.txt" -Encoding UTF8
-
           Compress-Archive -Path deploy\* -DestinationPath ScholarSync-Windows-x64.zip -Force
-          $size = [math]::Round((Get-Item ScholarSync-Windows-x64.zip).Length / 1MB, 1)
-          Write-Host "Package: ScholarSync-Windows-x64.zip ($size MB)"
+          $mb = [math]::Round((Get-Item ScholarSync-Windows-x64.zip).Length / 1MB, 1)
+          Write-Host "Package: $mb MB"
 
-      # 10. 上传构建产物
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -160,7 +115,6 @@ ScholarSync - AI 学术阅读器
           path: ScholarSync-Windows-x64.zip
           retention-days: 30
 
-  # 发布 Release（仅在推送 tag 时触发）
   release:
     needs: build-windows
     runs-on: ubuntu-latest
@@ -178,16 +132,16 @@ ScholarSync - AI 学术阅读器
           files: ScholarSync-Windows-x64.zip
           generate_release_notes: true
           body: |
-            ## ScholarSync Windows 版本
+            ## ScholarSync Windows Release
 
-            ### 安装方法
-            1. 下载 `ScholarSync-Windows-x64.zip` 并解压到任意目录
-            2. **首次运行**：先双击 `vc_redist.x64.exe` 安装 VC++ 运行时
-            3. 双击 `ScholarSync.exe` 启动
-            4. 进入设置页面填入 RAGFlow API Key
+            ### Installation
+            1. Download and extract `ScholarSync-Windows-x64.zip`
+            2. Run `vc_redist.x64.exe` first (if needed)
+            3. Launch `ScholarSync.exe`
+            4. Go to Settings and enter your RAGFlow API Key
 
-            ### 系统要求
-            - Windows 10 / 11（64位）
+            ### Requirements
+            - Windows 10 / 11 (64-bit)
 
-            ### 遇到问题？
-            查看日志：`%APPDATA%\ScholarSync\ScholarSync\scholarsync.log`
+            ### Troubleshooting
+            Log file: `%APPDATA%\ScholarSync\ScholarSync\scholarsync.log`
