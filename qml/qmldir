@@ -1,0 +1,9 @@
+module ScholarSync
+
+SideBar 1.0 components/SideBar.qml
+SearchBar 1.0 components/SearchBar.qml
+AddFolderDialog 1.0 components/AddFolderDialog.qml
+LibraryPage 1.0 pages/LibraryPage.qml
+PdfReaderPage 1.0 pages/PdfReaderPage.qml
+KnowledgePage 1.0 pages/KnowledgePage.qml
+SettingsPage 1.0 pages/SettingsPage.qml

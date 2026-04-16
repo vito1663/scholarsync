@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <file>../qml/main.qml</file>
+        <file>../qml/components/SideBar.qml</file>
+        <file>../qml/components/SearchBar.qml</file>
+        <file>../qml/components/AddFolderDialog.qml</file>
+        <file>../qml/pages/LibraryPage.qml</file>
+        <file>../qml/pages/PdfReaderPage.qml</file>
+        <file>../qml/pages/KnowledgePage.qml</file>
+        <file>../qml/pages/SettingsPage.qml</file>
+    </qresource>
+</RCC>

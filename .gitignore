@@ -1,0 +1,40 @@
+# 编译产物
+build/
+bin/
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.exe
+*.so
+*.dylib
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.user
+
+# Qt 生成文件
+*.pro.user
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+.qmake.stash
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 部署目录
+deploy/
+ScholarSync_deploy/
+*.zip

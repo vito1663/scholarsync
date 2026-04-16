@@ -1,0 +1,166 @@
+name: Build All Platforms
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            qt_arch: win64_msvc2019_64
+            cmake_generator: "NMake Makefiles"
+            artifact_name: ScholarSync-Windows-x64
+            exe_name: ScholarSync.exe
+
+          - os: ubuntu-22.04
+            qt_arch: gcc_64
+            cmake_generator: "Unix Makefiles"
+            artifact_name: ScholarSync-Linux-x64
+            exe_name: ScholarSync
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.6.3'
+          host: ${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}
+          target: 'desktop'
+          arch: ${{ matrix.qt_arch }}
+          modules: 'qtpdf qtnetworkauth'
+          cache: true
+
+      # Windows 专用：配置 MSVC
+      - name: Setup MSVC (Windows only)
+        if: matrix.os == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # Linux 专用：安装系统依赖
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libxkbcommon-dev libvulkan-dev \
+            libxcb1-dev libxcb-icccm4-dev libxcb-image0-dev \
+            libxcb-keysyms1-dev libxcb-render-util0-dev \
+            libxcb-xinerama0-dev libxcb-xkb-dev \
+            libgl1-mesa-dev libglib2.0-dev
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -G "${{ matrix.cmake_generator }}"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      # Windows 打包
+      - name: Deploy (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir deploy
+          copy build\ScholarSync.exe deploy\
+          windeployqt --release --qmldir qml --no-translations --compiler-runtime deploy\ScholarSync.exe
+          Compress-Archive -Path deploy\* -DestinationPath ${{ matrix.artifact_name }}.zip
+
+      # Linux 打包
+      - name: Deploy (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          mkdir deploy
+          cp build/ScholarSync deploy/
+          # 复制 Qt 库
+          Qt_LIB=$Qt6_DIR/../..
+          cp $Qt_LIB/lib/libQt6Core.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6Gui.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6Network.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6Qml.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6QmlModels.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6Quick.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6QuickControls2.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6QuickTemplates2.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6Sql.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6Pdf.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6PdfQuick.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6OpenGL.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6QmlCore.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6QuickLayouts.so.6 deploy/
+          cp $Qt_LIB/lib/libQt6QuickControls2Impl.so.6 deploy/ 2>/dev/null || true
+          cp $Qt_LIB/lib/libQt6QuickDialogs2.so.6 deploy/ 2>/dev/null || true
+          cp $Qt_LIB/lib/libQt6QuickDialogs2Utils.so.6 deploy/ 2>/dev/null || true
+          # 插件
+          mkdir -p deploy/platforms deploy/sqldrivers deploy/xcbglintegrations deploy/tls deploy/imageformats
+          cp $Qt_LIB/plugins/platforms/libqxcb.so deploy/platforms/
+          cp $Qt_LIB/plugins/sqldrivers/libqsqlite.so deploy/sqldrivers/
+          cp $Qt_LIB/plugins/xcbglintegrations/libqxcb-glx-integration.so deploy/xcbglintegrations/ 2>/dev/null || true
+          cp $Qt_LIB/plugins/tls/*.so deploy/tls/ 2>/dev/null || true
+          cp $Qt_LIB/plugins/imageformats/*.so deploy/imageformats/ 2>/dev/null || true
+          # QML
+          mkdir -p deploy/qml/QtQuick
+          cp -r $Qt_LIB/qml/QtQuick deploy/qml/
+          cp -r $Qt_LIB/qml/QtQml deploy/qml/
+          # 启动脚本
+          cat > deploy/run.sh << 'SCRIPT'
+          #!/bin/bash
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          export LD_LIBRARY_PATH="$DIR:$LD_LIBRARY_PATH"
+          export QT_PLUGIN_PATH="$DIR"
+          export QML2_IMPORT_PATH="$DIR/qml"
+          export QT_QPA_PLATFORM=xcb
+          exec "$DIR/ScholarSync" "$@"
+          SCRIPT
+          chmod +x deploy/run.sh
+          zip -r ${{ matrix.artifact_name }}.zip deploy/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.zip
+          retention-days: 30
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ScholarSync-Windows-x64/ScholarSync-Windows-x64.zip
+            ScholarSync-Linux-x64/ScholarSync-Linux-x64.zip
+          generate_release_notes: true
+          body: |
+            ## ScholarSync ${{ github.ref_name }}
+            
+            | 平台 | 下载 |
+            |------|------|
+            | Windows 10/11 (64位) | ScholarSync-Windows-x64.zip |
+            | Linux x86_64 (Ubuntu 20.04+) | ScholarSync-Linux-x64.zip |
+            
+            ### Windows 安装方法
+            1. 下载并解压 `ScholarSync-Windows-x64.zip`
+            2. 双击运行 `ScholarSync.exe`
+            3. 在设置页面填入 RAGFlow API Key
+            
+            ### 系统要求
+            - Windows：需安装 [VC++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+            - Linux：需安装 libxcb、libGL 等基础图形库
