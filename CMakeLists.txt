@@ -4,8 +4,8 @@ project(ScholarSync VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
-# 不使用 AUTORCC，改用预生成的 qrc_qml.cpp 直接加入源文件列表
-# 这样可以绕过所有平台差异，确保 QML 资源在 Windows/Linux/macOS 上都能正确嵌入
+# 注意：不使用 CMAKE_AUTORCC，改用 add_custom_command 显式调用 rcc
+# 这样可以确保 rcc 使用与当前 Qt 版本完全匹配的工具生成 qrc_qml.cpp
 
 # Qt6 模块
 find_package(Qt6 REQUIRED COMPONENTS
@@ -22,10 +22,42 @@ find_package(Qt6 REQUIRED COMPONENTS
 
 qt_standard_project_setup(REQUIRES 6.5)
 
+# ============================================================
+# 用 add_custom_command 在编译前调用平台对应的 rcc 生成 qrc_qml.cpp
+# 这是最可靠的跨平台方式，确保符号名称与当前 Qt 版本完全匹配
+# ============================================================
+set(QRC_OUTPUT "${CMAKE_BINARY_DIR}/qrc_qml.cpp")
+
+# 获取 Qt 的 rcc 工具路径
+get_target_property(QT_RCC_EXECUTABLE Qt6::rcc IMPORTED_LOCATION)
+if(NOT QT_RCC_EXECUTABLE)
+    find_program(QT_RCC_EXECUTABLE rcc HINTS "${Qt6_DIR}/../../../bin" "${Qt6_DIR}/../../../../bin")
+endif()
+message(STATUS "Qt rcc tool: ${QT_RCC_EXECUTABLE}")
+
+add_custom_command(
+    OUTPUT "${QRC_OUTPUT}"
+    COMMAND "${QT_RCC_EXECUTABLE}"
+            --name qml_resources
+            "${CMAKE_SOURCE_DIR}/qml.qrc"
+            -o "${QRC_OUTPUT}"
+    DEPENDS "${CMAKE_SOURCE_DIR}/qml.qrc"
+            "${CMAKE_SOURCE_DIR}/qml/main.qml"
+            "${CMAKE_SOURCE_DIR}/qml/components/SideBar.qml"
+            "${CMAKE_SOURCE_DIR}/qml/components/SearchBar.qml"
+            "${CMAKE_SOURCE_DIR}/qml/components/AddFolderDialog.qml"
+            "${CMAKE_SOURCE_DIR}/qml/pages/LibraryPage.qml"
+            "${CMAKE_SOURCE_DIR}/qml/pages/PdfReaderPage.qml"
+            "${CMAKE_SOURCE_DIR}/qml/pages/KnowledgePage.qml"
+            "${CMAKE_SOURCE_DIR}/qml/pages/SettingsPage.qml"
+    COMMENT "Generating QML resources with rcc..."
+    VERBATIM
+)
+
 # 收集源文件
 set(SOURCES
     src/main.cpp
-    src/qrc_qml.cpp          # 由 rcc 预生成，包含所有 QML 文件的二进制内容
+    "${QRC_OUTPUT}"                 # 由当前平台 rcc 在编译时生成
     src/database/DatabaseManager.cpp
     src/library/LibraryManager.cpp
     src/library/FolderWatcher.cpp
@@ -45,7 +77,6 @@ set(HEADERS
     src/sync/SyncManager.h
 )
 
-# qrc_qml.cpp 已预生成并加入 SOURCES，直接编译
 qt_add_executable(ScholarSync
     ${SOURCES}
     ${HEADERS}
