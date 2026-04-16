@@ -18,7 +18,7 @@ Makefile
 # Qt 生成文件
 *.pro.user
 moc_*.cpp
-qrc_*.cpp
+# qrc_*.cpp  # 注释掉：src/qrc_qml.cpp 是预生成文件，需要提交到仓库
 ui_*.h
 .qmake.stash
 
