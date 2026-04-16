@@ -4,6 +4,10 @@
 #include <QQuickStyle>
 #include <QDir>
 #include <QStandardPaths>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
+#include <QDebug>
 
 #include "database/DatabaseManager.h"
 #include "library/LibraryManager.h"
@@ -13,8 +17,30 @@
 #include "ragflow/KnowledgeBaseManager.h"
 #include "sync/SyncManager.h"
 
+// 日志输出到文件（Windows 下无控制台时用于调试）
+void setupFileLogging()
+{
+    QString logPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                      + "/ScholarSync/scholarsync.log";
+    QDir().mkpath(QFileInfo(logPath).absolutePath());
+    // 将 qDebug 输出重定向到文件
+    static QFile logFile(logPath);
+    if (logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        qInstallMessageHandler([](QtMsgType, const QMessageLogContext &, const QString &msg) {
+            static QTextStream stream(&logFile);
+            stream << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << " " << msg << "\n";
+            stream.flush();
+        });
+    }
+}
+
 int main(int argc, char *argv[])
 {
+    // Windows 下开启文件日志（无控制台时用于调试）
+#ifdef Q_OS_WIN
+    setupFileLogging();
+#endif
+
     QGuiApplication app(argc, argv);
     app.setApplicationName("ScholarSync");
     app.setApplicationVersion("1.0.0");

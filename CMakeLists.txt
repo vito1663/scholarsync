@@ -74,11 +74,22 @@ target_link_libraries(ScholarSync PRIVATE
     Qt6::PdfQuick
 )
 
+# Windows 图标资源
+if(WIN32)
+    # 生产版本使用 WIN32_EXECUTABLE 隐藏控制台
+    # 开发调试期间注释掉以便看到错误信息
+    set_target_properties(ScholarSync PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
 # 设置应用信息
 set_target_properties(ScholarSync PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER com.scholarsync.app
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     MACOSX_BUNDLE TRUE
-    WIN32_EXECUTABLE TRUE
+)
+
+# 设置输出目录
+set_target_properties(ScholarSync PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )
