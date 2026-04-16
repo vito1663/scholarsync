@@ -4,7 +4,7 @@ project(ScholarSync VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTORCC ON)  # 自动处理 .qrc 文件，跨平台最可靠的方式
 
 # Qt6 模块
 find_package(Qt6 REQUIRED COMPONENTS
@@ -43,14 +43,13 @@ set(HEADERS
     src/sync/SyncManager.h
 )
 
-# 将 QML 文件嵌入为 Qt 资源
-# qml.qrc 在项目根目录，路径相对于项目根，跨平台兼容
-qt_add_resources(QML_RESOURCES "${CMAKE_CURRENT_SOURCE_DIR}/qml.qrc")
-
+# 直接把 qml.qrc 加入可执行文件的源文件列表
+# CMAKE_AUTORCC=ON 会自动调用 rcc 工具处理 .qrc 文件
+# 这是最传统、最可靠的方式，在所有平台和生成器下均有效
 qt_add_executable(ScholarSync
     ${SOURCES}
     ${HEADERS}
-    ${QML_RESOURCES}
+    qml.qrc
 )
 
 target_link_libraries(ScholarSync PRIVATE
@@ -65,7 +64,7 @@ target_link_libraries(ScholarSync PRIVATE
     Qt6::PdfQuick
 )
 
-# Windows 隐藏控制台窗口
+# Windows 隐藏控制台窗口（Release 版本）
 if(WIN32)
     set_target_properties(ScholarSync PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
