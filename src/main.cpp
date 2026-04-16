@@ -36,6 +36,10 @@ void setupFileLogging()
 
 int main(int argc, char *argv[])
 {
+    // 显式初始化 QML 资源（防止 MSVC Release 模式链接器 /OPT:REF 优化删除资源数据）
+    // 资源名称来自 rcc --name qml_resources qml.qrc
+    Q_INIT_RESOURCE(qml_resources);
+
     // Windows 下开启文件日志（无控制台时用于调试）
 #ifdef Q_OS_WIN
     setupFileLogging();
@@ -87,7 +91,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("dbManager", &dbManager);
     engine.rootContext()->setContextProperty("appDataDir", dataDir);
 
-    // 加载主 QML（使用 qt_add_resources 嵌入，PREFIX="/"，路径为 qrc:/qml/main.qml）
+    // 加载主 QML（资源嵌入路径为 qrc:/qml/main.qml）
     const QUrl url(QStringLiteral("qrc:/qml/main.qml"));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [url](QObject *obj, const QUrl &objUrl) {
