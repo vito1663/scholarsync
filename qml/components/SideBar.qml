@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
+import "qrc:/qml/components"
 
 Rectangle {
     id: sidebar

@@ -72,8 +72,8 @@ jobs:
           if (-not $wdqt) { Write-Error "windeployqt not found!"; exit 1 }
           Write-Host "Using: $wdqt"
 
-          $qmlSrc = "${{ github.workspace }}\qml"
-          & "$wdqt" --release --qmldir "$qmlSrc" --no-translations --compiler-runtime "deploy\ScholarSync.exe"
+          # QML 已通过 qrc 嵌入到 exe 中，不需要 --qmldir 参数
+          & "$wdqt" --release --no-translations --compiler-runtime "deploy\ScholarSync.exe"
 
           Write-Host "Deploy done. Files:"
           Get-ChildItem deploy | Select-Object Name, Length

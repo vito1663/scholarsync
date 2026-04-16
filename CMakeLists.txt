@@ -43,23 +43,14 @@ set(HEADERS
     src/sync/SyncManager.h
 )
 
+# 将 QML 文件嵌入为 Qt 资源（通过标准 qrc XML 文件）
+# 资源路径为 qrc:/qml/main.qml
+qt_add_resources(QML_RESOURCES resources/qml.qrc)
+
 qt_add_executable(ScholarSync
     ${SOURCES}
     ${HEADERS}
-)
-
-qt_add_qml_module(ScholarSync
-    URI ScholarSync
-    VERSION 1.0
-    QML_FILES
-        qml/main.qml
-        qml/components/SideBar.qml
-        qml/components/SearchBar.qml
-        qml/components/AddFolderDialog.qml
-        qml/pages/LibraryPage.qml
-        qml/pages/PdfReaderPage.qml
-        qml/pages/KnowledgePage.qml
-        qml/pages/SettingsPage.qml
+    ${QML_RESOURCES}
 )
 
 target_link_libraries(ScholarSync PRIVATE
@@ -74,14 +65,12 @@ target_link_libraries(ScholarSync PRIVATE
     Qt6::PdfQuick
 )
 
-# Windows 图标资源
+# Windows 隐藏控制台窗口
 if(WIN32)
-    # 生产版本使用 WIN32_EXECUTABLE 隐藏控制台
-    # 开发调试期间注释掉以便看到错误信息
     set_target_properties(ScholarSync PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
-# 设置应用信息
+# macOS bundle
 set_target_properties(ScholarSync PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER com.scholarsync.app
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
@@ -89,7 +78,7 @@ set_target_properties(ScholarSync PROPERTIES
     MACOSX_BUNDLE TRUE
 )
 
-# 设置输出目录
+# 输出目录
 set_target_properties(ScholarSync PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )

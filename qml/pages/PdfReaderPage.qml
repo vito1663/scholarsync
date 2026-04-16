@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Pdf
+import "qrc:/qml/components"
 
 Rectangle {
     id: pdfReaderPage

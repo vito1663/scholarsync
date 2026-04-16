@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="qml/main.qml">../qml/main.qml</file>
+        <file alias="qml/components/SideBar.qml">../qml/components/SideBar.qml</file>
+        <file alias="qml/components/SearchBar.qml">../qml/components/SearchBar.qml</file>
+        <file alias="qml/components/AddFolderDialog.qml">../qml/components/AddFolderDialog.qml</file>
+        <file alias="qml/pages/LibraryPage.qml">../qml/pages/LibraryPage.qml</file>
+        <file alias="qml/pages/PdfReaderPage.qml">../qml/pages/PdfReaderPage.qml</file>
+        <file alias="qml/pages/KnowledgePage.qml">../qml/pages/KnowledgePage.qml</file>
+        <file alias="qml/pages/SettingsPage.qml">../qml/pages/SettingsPage.qml</file>
+    </qresource>
+</RCC>

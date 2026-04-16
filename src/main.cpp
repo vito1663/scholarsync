@@ -87,8 +87,8 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("dbManager", &dbManager);
     engine.rootContext()->setContextProperty("appDataDir", dataDir);
 
-    // 加载主 QML（使用 qt_add_qml_module 生成的 URI）
-    const QUrl url(u"qrc:/ScholarSync/qml/main.qml"_qs);
+    // 加载主 QML（使用 qt_add_resources 嵌入，PREFIX="/"，路径为 qrc:/qml/main.qml）
+    const QUrl url(QStringLiteral("qrc:/qml/main.qml"));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [url](QObject *obj, const QUrl &objUrl) {
         if (!obj && url == objUrl)

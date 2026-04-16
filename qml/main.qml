@@ -3,6 +3,10 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 
+// 引入自定义组件（通过 qrc 资源路径）
+import "qrc:/qml/components"
+import "qrc:/qml/pages"
+
 ApplicationWindow {
     id: root
     visible: true
