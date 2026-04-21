@@ -97,11 +97,99 @@ jobs:
           }
           if (-not $wdqt) { Write-Error "windeployqt not found!"; exit 1 }
           Write-Host "Using: $wdqt"
+          Write-Host "QT_ROOT_DIR: $env:QT_ROOT_DIR"
 
-          & "$wdqt" --release --no-translations --compiler-runtime "deploy\ScholarSync.exe"
+          # 关键修复：添加 --qmldir 参数，让 windeployqt 扫描源码 qml 目录
+          # 这样它才能知道需要部署哪些 QML 模块（QtQuick.Controls, QtQuick.Pdf 等）
+          & "$wdqt" --release --no-translations --compiler-runtime `
+            --qmldir qml `
+            "deploy\ScholarSync.exe"
 
-          Write-Host "Deploy done. Files:"
+          Write-Host "windeployqt exit code: $LASTEXITCODE"
+
+      - name: Manually copy Qt6PdfQuick.dll and QML modules
+        shell: powershell
+        run: |
+          $qtRoot = $env:QT_ROOT_DIR
+          Write-Host "Qt root: $qtRoot"
+
+          # Qt6PdfQuick.dll - windeployqt 有时漏掉这个
+          $pdfQuickDll = "$qtRoot\bin\Qt6PdfQuick.dll"
+          if (Test-Path $pdfQuickDll) {
+            Copy-Item $pdfQuickDll deploy\
+            Write-Host "Copied Qt6PdfQuick.dll"
+          } else {
+            Write-Warning "Qt6PdfQuick.dll not found at $pdfQuickDll"
+          }
+
+          # 确保 qml 目录存在
+          New-Item -ItemType Directory -Force -Path "deploy\qml" | Out-Null
+
+          # 需要的 QML 模块列表（根据 QML 文件中的 import 语句）
+          $qmlModules = @(
+            "QtQuick",
+            "QtQuick\Controls",
+            "QtQuick\Controls\Basic",
+            "QtQuick\Controls\impl",
+            "QtQuick\Layouts",
+            "QtQuick\Dialogs",
+            "QtQuick\Dialogs\quickimpl",
+            "QtQuick\NativeStyle",
+            "QtQuick\Templates",
+            "QtQuick\Window",
+            "QtQuick\Pdf",
+            "Qt\labs\platform",
+            "QtQml",
+            "QtQml\Models",
+            "QtQml\WorkerScript"
+          )
+
+          $qtQmlDir = "$qtRoot\qml"
+          Write-Host "Qt QML dir: $qtQmlDir"
+
+          foreach ($mod in $qmlModules) {
+            $src = "$qtQmlDir\$mod"
+            $dst = "deploy\qml\$mod"
+            if (Test-Path $src) {
+              New-Item -ItemType Directory -Force -Path $dst | Out-Null
+              # 复制 DLL 和 qmldir 文件
+              Get-ChildItem $src -File | Where-Object { $_.Extension -in @('.dll', '.qmltypes', '') -or $_.Name -eq 'qmldir' } | ForEach-Object {
+                Copy-Item $_.FullName $dst\
+              }
+              Write-Host "Deployed QML module: $mod"
+            } else {
+              Write-Warning "QML module not found: $src"
+            }
+          }
+
+          Write-Host "Deploy done. Top-level files:"
           Get-ChildItem deploy | Select-Object Name, Length
+          Write-Host "QML modules deployed:"
+          Get-ChildItem "deploy\qml" -Recurse -Directory | Select-Object FullName
+
+      - name: Verify QML modules
+        shell: powershell
+        run: |
+          # 验证关键 QML 模块是否存在
+          $required = @(
+            "deploy\qml\QtQuick\Controls\qmldir",
+            "deploy\qml\QtQuick\Layouts\qmldir",
+            "deploy\qml\QtQuick\Pdf\qmldir"
+          )
+          $allOk = $true
+          foreach ($f in $required) {
+            if (Test-Path $f) {
+              Write-Host "OK: $f"
+            } else {
+              Write-Warning "MISSING: $f"
+              $allOk = $false
+            }
+          }
+          if (-not $allOk) {
+            Write-Warning "Some QML modules are missing - app may fail to start"
+          } else {
+            Write-Host "All required QML modules present"
+          }
 
       - name: Create README
         shell: powershell
@@ -114,6 +202,7 @@ jobs:
           $content += "3. Go to Settings, enter your RAGFlow API Key`r`n`r`n"
           $content += "Requirements: Windows 10/11 (64-bit)`r`n`r`n"
           $content += "Log file: %APPDATA%\ScholarSync\ScholarSync\scholarsync.log`r`n"
+          $content += "(Also check scholarsync.log in the same folder as ScholarSync.exe)`r`n"
           Set-Content -Path "deploy\README.txt" -Value $content -Encoding UTF8
 
       - name: Download vc_redist

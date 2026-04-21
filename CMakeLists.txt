@@ -65,10 +65,12 @@ target_link_libraries(ScholarSync PRIVATE
     Qt6::PdfQuick
 )
 
-# Windows: 禁用链接器 /OPT:REF 优化，防止 Qt 资源数据（qt_resource_data）被删除
-# 同时隐藏控制台窗口（Release 版本）
+# Windows 配置
 if(WIN32)
+    # WIN32_EXECUTABLE: 隐藏控制台窗口（Release 版本）
+    # 注意：即使是 WIN32_EXECUTABLE，日志仍然写入文件
     set_target_properties(ScholarSync PROPERTIES WIN32_EXECUTABLE TRUE)
+
     # /OPT:NOREF 防止链接器删除"未直接引用"的符号（Qt 资源数据通过 static initializer 引用）
     target_link_options(ScholarSync PRIVATE /OPT:NOREF)
 endif()
